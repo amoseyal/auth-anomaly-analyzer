@@ -1,0 +1,15 @@
+# Virtual environment
+.venv/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+
+# Pytest cache
+.pytest_cache/
+
+# macOS system files
+.DS_Store
+
+# Generated analyzer output
+output/*
