@@ -1,10 +1,14 @@
 # Authentication Anomaly Analyzer
 
-A Python-based security analytics tool for detecting suspicious authentication activity in structured login data.
+A Python-based security analytics tool for detecting suspicious authentication activity through time-window analysis and event correlation.
+
+The analyzer processes structured authentication logs and identifies brute-force activity, password spraying, and successful logins following repeated authentication failures. Detection results are produced as structured security alerts for terminal review or CSV export.
+
+Built with **Python, pandas, and pytest**, with **14 automated tests** covering detection logic, input validation, reporting, and end-to-end processing.
 
 ## Overview
 
-The Authentication Anomaly Analyzer processes authentication logs and applies rule-based detection logic to identify potentially suspicious login behavior.
+The analyzer applies explicit, rule-based detection logic to authentication events using defined thresholds, correlation criteria, and time windows.
 
 The project currently detects three authentication patterns:
 
@@ -54,16 +58,16 @@ The successful authentication acts as the triggering event. The alert records th
 
 ## Features
 
-- Rule-based detection of common authentication anomalies
-- Time-window analysis of authentication events
-- Detection based on username and source IP correlation
-- CSV authentication log ingestion using pandas
-- Input validation for required fields and timestamp data
+- Rule-based detection of brute-force activity, password spraying, and successful logins following repeated failures
+- Time-window analysis and event correlation by username and source IP address
+- Structured security alerts containing detection type, severity, affected entities, event counts, and relevant timestamps
+- CSV authentication log ingestion and validation using pandas
+- Validation of required fields and timestamp data before analysis
+- Human-readable terminal reporting for detected anomalies
+- Optional CSV export for downstream analysis and reporting
 - Command-line interface with configurable input and output paths
-- Human-readable terminal reporting
-- Optional CSV export of structured detection results
+- Modular detection functions designed for extension with additional security analytics rules
 - Automated unit and integration testing with pytest
-- Modular detection functions designed for extension with additional rules
 
 ## Project Structure
 
@@ -169,7 +173,7 @@ python -m src.analyzer --help
 
 ## Example Output
 
-Running the analyzer against the included sample authentication log produces three detections:
+Running the analyzer against the included synthetic authentication log produces three security alerts, demonstrating each implemented detection rule:
 
 ```text
 Detected 3 authentication anomaly(s):
@@ -235,7 +239,7 @@ The authentication data included in this repository is synthetic and does not co
 
 ## Testing
 
-The project includes automated unit and integration tests using pytest.
+The project includes 14 automated unit and integration tests using pytest. The test suite validates detection behavior at and below configured thresholds, time-window enforcement, event correlation, input validation, reporting, and the end-to-end analysis workflow.
 
 Run the complete test suite from the project root:
 
@@ -276,9 +280,9 @@ This project is a rule-based authentication log analyzer intended for learning, 
 
 Detected anomalies should therefore be treated as **investigative signals that require additional context and validation**.
 
-## Future Improvements
+## Potential Extensions
 
-Potential extensions for future versions include:
+The current implementation is intentionally scoped as a rule-based authentication analytics project. Potential extensions for a production-oriented implementation could include:
 
 - **Configurable detection thresholds** — Move detection thresholds and time windows from constants to command-line arguments or a configuration file.
 - **Additional authentication detections** — Add rules for unusual login times, distributed authentication attacks, repeated account lockouts, and other suspicious authentication patterns.
@@ -298,8 +302,8 @@ Potential extensions for future versions include:
 
 ## Project Purpose
 
-This project was developed as part of a cybersecurity portfolio to apply Python programming and data-analysis techniques to a practical security use case.
+The Authentication Anomaly Analyzer demonstrates how authentication security concepts can be translated into explicit, testable detection logic using Python and structured log data.
 
-The project focuses on translating authentication security concepts into explicit detection logic, validating structured log data, correlating events across users and source IP addresses, producing actionable findings, and testing detection behavior against both positive and negative cases.
+The project focuses on correlating authentication events across users, source IP addresses, and time windows; distinguishing suspicious patterns from normal activity; validating security telemetry before analysis; and producing structured findings that can support further investigation.
 
-The implementation emphasizes readable code, modular detection functions, documented detection criteria, input validation, and automated testing.
+The implementation emphasizes readable and modular code, clearly documented detection criteria, input validation, positive and negative test cases, and reproducible security analysis.
