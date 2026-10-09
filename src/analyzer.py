@@ -51,6 +51,12 @@ def parse_arguments():
         help = 'optional path for exporting detected alerts as a CSV file.'
     )
 
+    parser.add_argument(
+        '--html',
+        type=Path,
+        help='optional path for generating an HTML security analysis report.'
+    )
+
     return parser.parse_args()
 
 
@@ -396,6 +402,18 @@ def main():
 
     if args.output:
         export_alerts(alerts, args.output)
+
+    # Generate an HTML security report when an output path is provided.
+    if args.html:
+        from src.reporting import generate_html_report
+
+        generate_html_report(
+            auth_logs,
+            alerts,
+            args.html
+        )
+
+        print(f'HTML security report generated: {args.html}')
 
 
 if __name__ == '__main__':
