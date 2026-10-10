@@ -410,7 +410,8 @@ def main():
         generate_html_report(
             auth_logs,
             alerts,
-            args.html
+            args.html,
+            source_path=args.input
         )
 
         print(f'HTML security report generated: {args.html}')
