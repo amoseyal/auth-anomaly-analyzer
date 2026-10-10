@@ -2,9 +2,11 @@
 
 A Python-based security analytics tool for detecting suspicious authentication activity through time-window analysis and event correlation.
 
-The analyzer processes structured authentication logs and identifies brute-force activity, password spraying, and successful logins following repeated authentication failures. Detection results are produced as structured security alerts for terminal review or CSV export.
+The analyzer processes structured authentication logs and identifies brute-force activity, password spraying, and successful logins following repeated authentication failures. Detection results are presented as structured security alerts in the terminal, with optional CSV export and a self-contained HTML security analysis report.
 
-Built with **Python, pandas, and pytest**, with **14 automated tests** covering detection logic, input validation, reporting, and end-to-end processing.
+The HTML report provides an executive summary, detection overview, investigation findings, supporting event evidence, and chronological authentication timelines.
+
+Built with **Python, pandas, and pytest**, with **39 automated tests** covering detection logic, input validation, reporting, command-line integration, and end-to-end processing.
 
 ## Overview
 
@@ -65,8 +67,12 @@ The successful authentication acts as the triggering event. The alert records th
 - Validation of required fields and timestamp data before analysis
 - Human-readable terminal reporting for detected anomalies
 - Optional CSV export for downstream analysis and reporting
-- Command-line interface with configurable input and output paths
-- Modular detection functions designed for extension with additional security analytics rules
+- Self-contained HTML security analysis reports with an executive summary and detection overview
+- Detailed investigation findings with supporting authentication event evidence
+- Chronological event timelines and documented detection methodology
+- Command-line interface with configurable input, CSV output, and HTML report paths
+- Support for generating CSV and HTML reports simultaneously
+- Modular detection and reporting functions designed for extension
 - Automated unit and integration testing with pytest
 
 ## Project Structure
@@ -76,23 +82,29 @@ auth-anomaly-analyzer/
 ├── data/
 │   └── auth_logs.csv
 ├── output/
-│   └── (generated alert reports)
+│   └── (generated CSV and HTML reports)
 ├── src/
 │   ├── __init__.py
-│   └── analyzer.py
+│   ├── analyzer.py
+│   └── reporting.py
 ├── tests/
-│   └── test_analyzer.py
+│   ├── test_analyzer.py
+│   ├── test_cli.py
+│   └── test_reporting.py
 ├── .gitignore
 ├── README.md
 └── requirements.txt
 ```
 
 - `data/` contains the synthetic authentication log used to demonstrate the analyzer.
-- `src/analyzer.py` contains data ingestion, validation, detection, reporting, export, and CLI logic.
+- `src/analyzer.py` contains data ingestion, validation, detection logic, terminal reporting, CSV export, and CLI functionality.
+- `src/reporting.py` generates self-contained HTML security analysis reports with investigation findings, supporting evidence, and event timelines.
 - `src/__init__.py` defines `src` as a Python package.
-- `tests/` contains the pytest unit and integration test suite.
+- `tests/test_analyzer.py` validates detection logic, input handling, and CSV reporting.
+- `tests/test_reporting.py` validates HTML report generation, content, and formatting.
+- `tests/test_cli.py` contains CLI integration tests covering HTML generation, simultaneous exports, and backward compatibility.
 - `requirements.txt` defines the project's direct third-party dependencies.
-- `output/` is created automatically when CSV output is requested and is excluded from version control.
+- `output/` stores generated CSV and HTML reports and is excluded from version control.
 
 ## Installation
 
@@ -165,6 +177,31 @@ python -m src.analyzer \
 
 The output directory is created automatically if it does not already exist.
 
+### Generate an HTML security report
+
+Use `--html` to generate a self-contained HTML report containing an executive summary, detection overview, investigation findings, supporting evidence, and chronological authentication event timelines.
+
+```bash
+python -m src.analyzer --html output/security_report.html
+```
+
+The report can be opened in any modern web browser without requiring a web server or additional dependencies.
+
+### Generate CSV and HTML reports simultaneously
+
+Use `--output` and `--html` together to generate both report formats during a single analysis:
+
+```bash
+python -m src.analyzer \
+    --input data/auth_logs.csv \
+    --output output/alerts.csv \
+    --html output/security_report.html
+```
+
+Both reports contain findings from the same authentication analysis. The CSV provides structured alert data for downstream processing, while the HTML report provides a more detailed, human-readable investigation summary.
+
+The analyzer continues to display detected alerts in the terminal regardless of whether either export option is specified.
+
 ### View command-line help
 
 ```bash
@@ -212,6 +249,29 @@ Successful login: 2026-09-20 22:15:36
 
 When `--output` is specified, the same findings are also exported as structured CSV data for further analysis or reporting.
 
+### HTML Security Report
+
+When `--html` is specified, the analyzer generates a self-contained HTML security report designed to support authentication security investigations.
+
+The report includes:
+
+- **Executive summary** — An overview of the authentication analysis and detected security findings.
+- **Detection overview** — A breakdown of findings by detection type.
+- **Investigation findings** — Detailed information about individual alerts, including affected accounts, source IP addresses, severity, and relevant timestamps.
+- **Supporting evidence** — Authentication events associated with each finding.
+- **Event timelines** — Chronological views of authentication activity relevant to detected anomalies.
+- **Detection methodology** — Explanations of the rules and criteria used to identify suspicious activity.
+
+To generate the report using the included sample data:
+
+```bash
+python -m src.analyzer --html output/security_report.html
+```
+
+Open `output/security_report.html` in a web browser to review the findings.
+
+The HTML report is intended for human-readable security analysis, while the CSV export provides structured alert data suitable for additional processing.
+
 ## Input Format
 
 The analyzer expects authentication data in CSV format with the following required columns:
@@ -239,31 +299,53 @@ The authentication data included in this repository is synthetic and does not co
 
 ## Testing
 
-The project includes 14 automated unit and integration tests using pytest. The test suite validates detection behavior at and below configured thresholds, time-window enforcement, event correlation, input validation, reporting, and the end-to-end analysis workflow.
+The project includes **39 automated tests** using pytest, covering authentication anomaly detection, input validation, CSV export, HTML security reporting, and command-line integration.
 
-Run the complete test suite from the project root:
+The test suite is organized into three modules:
+
+- **`tests/test_analyzer.py`** — 14 tests covering detection thresholds, time-window enforcement, event correlation, input validation, terminal output, and CSV export.
+- **`tests/test_reporting.py`** — 22 tests covering HTML report generation, report content, investigation evidence, event timelines, formatting, and output safety.
+- **`tests/test_cli.py`** — 3 integration tests covering HTML report generation, simultaneous CSV and HTML exports, and execution without optional export arguments.
+
+### Run the complete test suite
+
+From the project root:
 
 ```bash
-python -m pytest
+python -m pytest -v
 ```
 
-The current test suite contains **14 tests** covering:
+Expected result:
 
-- Brute-force detection at the configured threshold
-- Prevention of brute-force false positives below the threshold
-- Time-window enforcement for brute-force detection
-- Separation of authentication activity by username and source IP
-- Password-spraying detection across multiple user accounts
-- Prevention of password-spraying detection against a single account
-- Successful-login-after-failures detection
-- Required-column validation during CSV ingestion
-- Invalid timestamp handling
-- CSV alert creation and exported field validation
-- Human-readable formatting of password-spraying usernames
-- Terminal output for detected anomalies
-- End-to-end processing from CSV ingestion through detection and CSV export
+```text
+39 passed
+```
 
-The integration test creates synthetic authentication data, processes it through all three detection rules, exports the resulting alerts, and verifies that all expected detection types are present in the exported report.
+### Run individual test modules
+
+Detection and CSV reporting:
+
+```bash
+python -m pytest tests/test_analyzer.py -v
+```
+
+HTML security reporting:
+
+```bash
+python -m pytest tests/test_reporting.py -v
+```
+
+Command-line integration:
+
+```bash
+python -m pytest tests/test_cli.py -v
+```
+
+The tests use synthetic authentication events to validate expected detection behavior, including threshold boundaries, time-window constraints, and correlation criteria.
+
+Reporting tests verify that detected anomalies are represented accurately in generated reports. CLI integration tests exercise the complete workflow from command-line argument processing through authentication analysis and report generation.
+
+Temporary files and directories are managed through pytest fixtures to keep test execution isolated and reproducible.
 
 ## Limitations
 
