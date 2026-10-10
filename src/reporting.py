@@ -1,6 +1,7 @@
 import pandas as pd
 
 from pathlib import Path
+from datetime import datetime
 from html import escape
 
 
@@ -369,7 +370,7 @@ def build_detection_evidence(alert):
 
     return evidence
 
-def generate_html_report(auth_logs, alerts, output_path):
+def generate_html_report(auth_logs, alerts, output_path, source_path=None):
     '''
     Generate a self-contained HTML authentication security report.
 
@@ -380,6 +381,40 @@ def generate_html_report(auth_logs, alerts, output_path):
     # Normalize the output path so the function can accept either
     # a Path object or a path-like string.
     output_path = Path(output_path)
+
+    # Record when the security analysis report is generated.
+    # Include the local timezone to make the timestamp unambiguous.
+    analysis_date = datetime.now().astimezone().strftime(
+        '%B %d, %Y at %I:%M: %p %Z'
+    )
+
+    # Determine the period covered by the authentication logs.
+    # Handle empty datasets without raising an exception.
+    if auth_logs.empty:
+        observation_period = 'No authentication events available'
+    else:
+        first_event = auth_logs['timestamp'].min()
+        last_event = auth_logs['timestamp'].max()
+
+        observation_period = (
+            f"{first_event.strftime('%B %d, %Y %H:%M:%S')} - "
+            f"{last_event.strftime('%B %d, %Y %H:%M:%S')}"
+        )
+
+    # Describe the scope and methodology of the security analysis.
+    analysis_scope = 'Authentication anomaly detection'
+
+    detection_methodology = (
+        'Rule-based correlation of authentication events '
+        'using predefined time windows and detection thresholds.'
+    )
+
+    # Identify the source file used for authentication analysis.
+    # Display only the filename rather than the full filesystem path.
+    if source_path is not None:
+        data_source = Path(source_path).name
+    else:
+        data_source = 'Not specified'
 
     # Build the tested summary metrics from the authentication
     # events and structured detection alerts.
@@ -933,6 +968,41 @@ def generate_html_report(auth_logs, alerts, output_path):
                 using rule-based anomaly detection.
             </p>
         </header>
+
+                <!-- ---------- Analysis Information ---------- -->
+
+        <section>
+            <h2>Analysis Information</h2>
+
+            <div class="evidence-grid">
+
+                <div class="evidence-item">
+                    <span class="evidence-label">Analysis Date</span>
+                    <span class="evidence-value">{analysis_date}</span>
+                </div>
+
+                <div class="evidence-item">
+                    <span class="evidence-label">Analysis Scope</span>
+                    <span class="evidence-value">{analysis_scope}</span>
+                </div>
+
+                <div class="evidence-item">
+                    <span class="evidence-label">Data Source</span>
+                    <span class="evidence-value">{escape_html_value(data_source)}</span>
+                </div>
+
+                <div class="evidence-item">
+                    <span class="evidence-label">Observation Period</span>
+                    <span class="evidence-value">{observation_period}</span>
+                </div>
+
+                <div class="evidence-item" style="grid-column: 1 / -1;">
+                    <span class="evidence-label">Detection Methodology</span>
+                    <span class="evidence-value">{detection_methodology}</span>
+                </div>
+
+            </div>
+        </section>
 
         <!-- ---------- Executive Summary ---------- -->
 

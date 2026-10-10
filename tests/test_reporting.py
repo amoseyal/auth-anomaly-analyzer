@@ -1134,3 +1134,117 @@ def test_generate_html_report_includes_analyst_interpretations(tmp_path):
 
     # Verify that the report preserves appropriate uncertainty.
     assert 'does not establish account compromise' in report_html
+
+
+def test_generate_html_report_includes_analysis_metadata(tmp_path):
+    '''
+    Verify that the HTML report includes the analysis metadata
+    and correctly identifies the source authentication log.
+    '''
+
+    # Create an empty authentication dataset.
+    auth_logs = pd.DataFrame(
+        columns=['timestamp', 'username', 'source_ip', 'status']
+    )
+
+    alerts = []
+    output_path = tmp_path / 'security_report.html'
+
+    # Generate the report with a specified source file.
+    generate_html_report(
+        auth_logs,
+        alerts,
+        output_path,
+        source_path='data/auth_logs.csv'
+    )
+
+    # Read the generated HTML.
+    html = output_path.read_text(encoding='utf-8')
+
+    # Verify that the metadata section and fields are present.
+    assert '<h2>Analysis Information</h2>' in html
+    assert 'Analysis Date' in html
+    assert 'Analysis Scope' in html
+    assert 'Authentication anomaly detection' in html
+    assert 'Data Source' in html
+    assert 'auth_logs.csv' in html
+    assert 'Observation Period' in html
+    assert 'No authentication events available' in html
+    assert 'Detection Methodology' in html
+    assert 'Rule-based correlation of authentication events' in html
+
+
+def test_generate_html_report_observation_period(tmp_path):
+    '''
+    Verify that the observation period reflects the earliest and
+    latest authentication events, regardless of their original order.
+    '''
+
+    # Create authentication events in nonchronological order.
+    auth_logs = pd.DataFrame({
+        'timestamp': pd.to_datetime([
+            '2026-10-10 14:30:00',
+            '2026-10-08 09:15:00',
+            '2026-10-09 18:45:00'
+        ]),
+        'username': ['jdoe', 'mchen', 'rpatel'],
+        'source_ip': [
+            '192.0.2.10',
+            '192.0.2.20',
+            '192.0.2.30'
+        ],
+        'status': ['success', 'failure', 'success']
+    })
+
+    alerts = []
+    output_path = tmp_path / 'security_report.html'
+
+    # Generate the HTML report.
+    generate_html_report(
+        auth_logs,
+        alerts,
+        output_path,
+        source_path='data/auth_logs.csv'
+    )
+
+    # Read the generated HTML.
+    html = output_path.read_text(encoding='utf-8')
+
+    # Verify the observation period uses the earliest and latest events.
+    assert (
+        'October 08, 2026 09:15:00 - '
+        'October 10, 2026 14:30:00'
+    ) in html
+
+
+def test_generate_html_report_escapes_source_filename(tmp_path):
+    '''
+    Verify that potentially unsafe characters in the source
+    filename are escaped before insertion into the HTML report.
+    '''
+
+    # Create an empty authentication dataset.
+    auth_logs = pd.DataFrame(
+        columns=['timestamp', 'username', 'source_ip', 'status']
+    )
+
+    alerts = []
+    output_path = tmp_path / 'security_report.html'
+
+    # Use a filename containing HTML markup.
+    source_path = 'data/<script>alert(1).csv'
+
+    # Generate the HTML report.
+    generate_html_report(
+        auth_logs,
+        alerts,
+        output_path,
+        source_path=source_path
+    )
+
+    # Read the generated HTML.
+    html = output_path.read_text(encoding='utf-8')
+
+    # Verify that the HTML markup is escaped.
+    assert '&lt;script&gt;alert(1).csv' in html
+    assert '<script>' not in html
