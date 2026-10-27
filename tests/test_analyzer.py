@@ -303,7 +303,9 @@ def test_load_auth_logs_rejects_missing_columns(tmp_path):
 
 
 def test_load_auth_logs_rejects_invalid_timestamp(tmp_path):
-    '''Authentication logs with invalid timestamps should be rejected.'''
+    '''
+    Authentication logs with invalid timestamps should be rejected.
+    '''
 
     test_file = tmp_path / 'invalid_timestamp.csv'
 
@@ -318,6 +320,172 @@ def test_load_auth_logs_rejects_invalid_timestamp(tmp_path):
     ):
         load_auth_logs(test_file)
 
+
+def test_load_auth_logs_rejects_missing_username(tmp_path):
+    '''
+    Authentication logs with missing usernames should be rejected.
+    '''
+
+    test_file = tmp_path / 'missing_username.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,,192.168.1.25,failure\n'
+    )
+
+    with pytest.raises(
+        ValueError,
+        match='missing or blank usernames'
+    ):
+        load_auth_logs(test_file)
+
+
+def test_load_auth_logs_rejects_blank_username(tmp_path):
+    '''
+    Authentication logs with whitespace-only usernames should be rejected.
+    '''
+
+    test_file = tmp_path / 'blank_username.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,   ,192.168.1.25,failure\n'
+    )
+
+    with pytest.raises(
+        ValueError,
+        match='missing or blank usernames'
+    ):
+        load_auth_logs(test_file)
+
+
+def test_load_auth_logs_rejects_invalid_source_ip(tmp_path):
+    '''
+    Authentication logs with malformed IP addresses should be rejected.
+    '''
+
+    test_file = tmp_path / 'invalid_source_ip.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,jdoe,999.168.1.25,failure\n'
+    )
+
+    with pytest.raises(
+        ValueError,
+        match='missing or invalid source IP addresses'
+    ):
+        load_auth_logs(test_file)
+
+
+def test_load_auth_logs_rejects_missing_source_ip(tmp_path):
+    '''Authentication logs with missing source IP addresses should be rejected.'''
+
+    test_file = tmp_path / 'missing_source_ip.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,jdoe,,failure\n'
+    )
+
+    with pytest.raises(
+        ValueError,
+        match='missing or invalid source IP addresses'
+    ):
+        load_auth_logs(test_file)
+
+
+def test_load_auth_logs_accepts_ipv6_source_ip(tmp_path):
+    '''
+    Valid IPv6 source addresses should be accepted.
+    '''
+
+    test_file = tmp_path / 'valid_ipv6.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,jdoe,2001:db8::1,failure\n'
+    )
+
+    auth_logs = load_auth_logs(test_file)
+
+    assert len(auth_logs) == 1
+    assert auth_logs.loc[0, 'source_ip'] == '2001:db8::1'
+
+def test_laod_auth_logs_reject_invalid_status(tmp_path):
+    '''
+    Unsupported authentication statuses should be rejected.
+    '''
+
+    test_file = tmp_path / 'invalid_status.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,jdoe,192.168.1.25,unknown\n'
+    )
+
+    with pytest.raises(
+        ValueError,
+        match='missing or invalid status values'
+    ):
+        load_auth_logs(test_file)
+
+def test_load_auth_logs_rejects_missing_status(tmp_path):
+    '''
+    Missing authentication statuses should be rejected.
+    '''
+
+    test_file = tmp_path / 'missing_status.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,jdoe,192.168.1.25,\n'
+    )
+
+    with pytest.raises(
+        ValueError,
+        match='missing or invalid status values'
+    ):
+        load_auth_logs(test_file)
+
+def test_load_auth_logs_accepts_valid_statuses(tmp_path):
+    '''
+    Both supported authentication statuses should be accepted.
+    '''
+
+    test_file = tmp_path / 'valid_statuses.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        '2026-09-20 22:14:03,jdoe,192.168.1.25,failure\n'
+        '2026-09-20 22:15:03,jdoe,192.168.1.25,success\n'
+    )
+
+    auth_logs = load_auth_logs(test_file)
+
+    assert len(auth_logs) ==2
+    assert auth_logs['status'].tolist() == [
+        'failure',
+        'success'
+    ]
+
+def test_load_auth_logs_rejects_missing_timestamp(tmp_path):
+    '''
+    Authentication logs with missing timestamps should be rejected.
+    '''
+
+    test_file = tmp_path / 'missing_timestamp.csv'
+
+    test_file.write_text(
+        'timestamp,username,source_ip,status\n'
+        ',jdoe,192.168.1.25,failure\n'
+    )
+
+    with pytest.raises(
+        ValueError,
+        match='missing timestamp values'
+    ):
+        load_auth_logs(test_file)
 
 # Alert export tests
 

@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+from ipaddress import ip_address
 
 import pandas as pd
 
@@ -77,6 +78,46 @@ def load_auth_logs(filepath):
             f"Missing required columns: {', '.join(sorted(missing_columns))}"
         )
 
+    # Reject records containing missing or blank usernames.
+    # Invalid usernames prevent reliable account-based detection.
+    invalid_usernames = (
+        df['username'].isna()
+        | df['username'].astype('string').str.strip().eq('').fillna(False)
+    )
+
+    if invalid_usernames.any():
+        raise ValueError(
+            'Authentication log contains missing or blank usernames.'
+        )
+
+    # Validate source IP addresses using Python's standard library.
+    # Reject missing, blank, or malformed IPv4 and IPv6 addresses.
+    for source_ip in df['source_ip']:
+
+        if pd.isna(source_ip):
+            raise ValueError(
+                'Authentication log contains missing or invalid source IP addresses.'
+            )
+
+        try:
+            ip_address(str(source_ip).strip())
+
+        except ValueError as error:
+            raise ValueError(
+                'Authentication log contains missing or invalid source IP addresses.'
+            ) from error
+
+    # Define the authentication statuses supported by the detection rules.
+    valid_statuses = {'success', 'failure'}
+
+    # Identify missing or unsupported authentication status values.
+    invalid_statuses = ~df['status'].isin(valid_statuses)
+
+    if invalid_statuses.any():
+        raise ValueError(
+            'Authentication log contains missing or invalid status values.'
+        )
+
     try:
         df['timestamp'] = pd.to_datetime(
             df['timestamp'],
@@ -87,6 +128,13 @@ def load_auth_logs(filepath):
         raise ValueError(
             'Invalid timestamp data in authentication log.'
         ) from error
+
+    # Reject missing timestamps that cannot be used for time-window analysis.
+    # Pandas represents missing datetime values as NaT (Not a Time).
+    if df['timestamp'].isna().any():
+        raise ValueError(
+            'Authentication log contains missing timestamp values.'
+        )
 
     return df
 
