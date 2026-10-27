@@ -6,7 +6,7 @@ The analyzer processes structured authentication logs and identifies brute-force
 
 The HTML report provides an executive summary, detection overview, investigation findings, supporting event evidence, and chronological authentication timelines.
 
-Built with **Python, pandas, and pytest**, with **39 automated tests** covering detection logic, input validation, reporting, command-line integration, and end-to-end processing.
+Built with **Python**, **pandas**, and **pytest**, with **51 automated tests** covering detection logic, input validation, reporting, command-line integration, and end-to-end processing.
 
 ## Overview
 
@@ -64,7 +64,7 @@ The successful authentication acts as the triggering event. The alert records th
 - Time-window analysis and event correlation by username and source IP address
 - Structured security alerts containing detection type, severity, affected entities, event counts, and relevant timestamps
 - CSV authentication log ingestion and validation using pandas
-- Validation of required fields and timestamp data before analysis
+- Input validation for required columns, missing or blank usernames, malformed IPv4 and IPv6 addresses, unsupported authentication statuses, and invalid or missing timestamps
 - Human-readable terminal reporting for detected anomalies
 - Optional CSV export for downstream analysis and reporting
 - Self-contained HTML security analysis reports with an executive summary and detection overview
@@ -73,12 +73,15 @@ The successful authentication acts as the triggering event. The alert records th
 - Command-line interface with configurable input, CSV output, and HTML report paths
 - Support for generating CSV and HTML reports simultaneously
 - Modular detection and reporting functions designed for extension
-- Automated unit and integration testing with pytest
+- Automated unit and integration testing with pytest, including GitHub Actions CI for pushes and pull requests targeting main
 
 ## Project Structure
 
 ```text
 auth-anomaly-analyzer/
+├── .github/
+│   └── workflows/
+│       └── python-tests.yml
 ├── data/
 │   └── auth_logs.csv
 ├── output/
@@ -96,6 +99,7 @@ auth-anomaly-analyzer/
 └── requirements.txt
 ```
 
+- `.github/workflows/python-tests.yml` defines the GitHub Actions CI workflow, which installs project dependencies and runs the automated test suite on pushes and pull requests targeting `main`.
 - `data/` contains the synthetic authentication log used to demonstrate the analyzer.
 - `src/analyzer.py` contains data ingestion, validation, detection logic, terminal reporting, CSV export, and CLI functionality.
 - `src/reporting.py` generates self-contained HTML security analysis reports with investigation findings, supporting evidence, and event timelines.
@@ -103,7 +107,7 @@ auth-anomaly-analyzer/
 - `tests/test_analyzer.py` validates detection logic, input handling, and CSV reporting.
 - `tests/test_reporting.py` validates HTML report generation, content, and formatting.
 - `tests/test_cli.py` contains CLI integration tests covering HTML generation, simultaneous exports, and backward compatibility.
-- `requirements.txt` defines the project's direct third-party dependencies.
+- `requirements.txt` specifies the pinned Python dependencies used for local development and automated testing.
 - `output/` stores generated CSV and HTML reports and is excluded from version control.
 
 ## Installation
@@ -293,19 +297,29 @@ timestamp,username,source_ip,status
 2026-09-20 22:15:36,jdoe,185.72.14.91,success
 ```
 
-During ingestion, the analyzer validates that all required columns are present and converts the `timestamp` field to datetime values. Missing required columns or invalid timestamp data cause the analysis to stop with a descriptive error message.
+During ingestion, the analyzer validates authentication records before applying detection rules. The following requirements are enforced:
+
+- **Required columns:** The CSV file must contain `timestamp`, `username`, `source_ip`, and `status`.
+- **Username:** Each record must contain a non-empty username. Missing or whitespace-only usernames are rejected.
+- **Source IP address:** Each record must contain a valid IPv4 or IPv6 address. Missing or malformed addresses are rejected.
+- **Authentication status:** Values must be exactly `success` or `failure`. Missing or unsupported values are rejected.
+- **Timestamp:** Each record must contain a valid, parseable timestamp. Missing or invalid timestamps are rejected.
+
+If validation fails, the analyzer raises a descriptive `ValueError` and stops processing rather than generating potentially misleading detection results.
+
+Input validation improves data integrity but does not establish the authenticity or trustworthiness of the underlying authentication events.
 
 The authentication data included in this repository is synthetic and does not contain real user or production authentication information.
 
 ## Testing
 
-The project includes **39 automated tests** using pytest, covering authentication anomaly detection, input validation, CSV export, HTML security reporting, and command-line integration.
+The project includes **51 automated tests** using pytest, covering authentication anomaly detection, input validation, CSV export, HTML security reporting, and command-line integration.
 
 The test suite is organized into three modules:
 
-- **`tests/test_analyzer.py`** — 14 tests covering detection thresholds, time-window enforcement, event correlation, input validation, terminal output, and CSV export.
+- **`tests/test_analyzer.py`** — 23 tests covering detection thresholds, time-window enforcement, event correlation, input validation, terminal output, and CSV export.
 - **`tests/test_reporting.py`** — 22 tests covering HTML report generation, report content, investigation evidence, event timelines, formatting, and output safety.
-- **`tests/test_cli.py`** — 3 integration tests covering HTML report generation, simultaneous CSV and HTML exports, and execution without optional export arguments.
+- **`tests/test_cli.py`** — 6 integration tests covering HTML report generation, simultaneous CSV and HTML exports, and execution without optional export arguments.
 
 ### Run the complete test suite
 
@@ -318,8 +332,23 @@ python -m pytest -v
 Expected result:
 
 ```text
-39 passed
+51 passed
 ```
+
+### Continuous Integration (GitHub Actions)
+
+The repository uses GitHub Actions to automatically execute the Python test suite when changes are pushed to `main` or when pull requests target `main`.
+
+The workflow is defined in `.github/workflows/python-tests.yml` and performs the following steps:
+
+1. Checks out the repository.
+2. Configures Python 3.12 on a GitHub-hosted Ubuntu runner.
+3. Installs the pinned dependencies from `requirements.txt`.
+4. Executes the complete automated test suite using `python -m pytest -v`.
+
+The workflow uses read-only repository permissions and pins GitHub Actions dependencies to specific commit revisions to reduce supply-chain risk.
+
+Test results are displayed in the GitHub Actions interface and as checks on pull requests, helping identify regressions before changes are merged.
 
 ### Run individual test modules
 
@@ -351,7 +380,7 @@ Temporary files and directories are managed through pytest fixtures to keep test
 
 This project is a rule-based authentication log analyzer intended for learning, demonstration, and security analytics practice. The current implementation has several limitations:
 
-- **Static detection thresholds** — Detection rules currently use fixed thresholds and 10-minute time windows. Production environments would typically require thresholds tuned to normal authentication behavior and organizational risk.
+- **Fixed detection parameters** — Detection rules currently use predefined thresholds and 10-minute detection windows. Users cannot yet configure these parameters or restrict analysis to a specified date range. Production environments typically require settings tuned to normal authentication behavior and organizational risk.
 - **Limited event context** — Analysis is based on timestamp, username, source IP address, and authentication status. It does not currently incorporate device identity, geolocation, user agent, authentication method, identity provider, or other contextual signals.
 - **Potential false positives** — Repeated failures can result from forgotten passwords, stale credentials, automated services, shared network addresses, or legitimate user behavior.
 - **Potential false negatives** — Slow or distributed attacks may remain below the configured thresholds. Attackers using multiple source IP addresses may also avoid rules that correlate events by a single source IP.
@@ -366,7 +395,7 @@ Detected anomalies should therefore be treated as **investigative signals that r
 
 The current implementation is intentionally scoped as a rule-based authentication analytics project. Potential extensions for a production-oriented implementation could include:
 
-- **Configurable detection thresholds** — Move detection thresholds and time windows from constants to command-line arguments or a configuration file.
+- **Configurable time-window analysis** — Allow users to specify detection windows and filter authentication events by start and end timestamps through command-line arguments, improving flexibility and reproducibility.
 - **Additional authentication detections** — Add rules for unusual login times, distributed authentication attacks, repeated account lockouts, and other suspicious authentication patterns.
 - **Contextual enrichment** — Incorporate additional fields such as device identifiers, geographic information, authentication methods, and user agents to improve detection context.
 - **IP reputation enrichment** — Optionally evaluate source IP addresses using external threat-intelligence or reputation data.
@@ -379,6 +408,7 @@ The current implementation is intentionally scoped as a rule-based authenticatio
 - **Python 3**
 - **pandas** — CSV ingestion, datetime processing, filtering, grouping, and structured alert export
 - **pytest** — Unit and integration testing
+- **GitHub Actions** - Continuous integration and automated testing on pull requests and pushes to `main`
 - **argparse** — Command-line interface and argument handling
 - **pathlib** — Platform-independent filesystem path handling
 
