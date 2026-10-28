@@ -548,6 +548,36 @@ def generate_html_report(
             alert['detection']
         )
 
+        # Map recognized alert severities to safe CSS classes.
+        # Unrecognized or missing values receive neutral styling.
+        severity_classes = {
+            'critical': 'severity-critical',
+            'high': 'severity-high',
+            'medium': 'severity-medium',
+            'low': 'severity-low'
+        }
+
+        severity_value = str(alert.get('severity', '')).strip().lower()
+
+        severity_class = severity_classes.get(
+            severity_value,
+            ''
+        )
+
+        # Display only recognized severity labels.
+        # Use "Unspecified" when the alert has no recognized severity.
+        severity_labels = {
+            'critical': 'Critical',
+            'high': 'High',
+            'medium': 'Medium',
+            'low': 'Low'
+        }
+
+        severity_label = severity_labels.get(
+            severity_value,
+            'Unspecified'
+        )
+
         # Extract the evidence already collected by the detection engine.
         evidence = build_detection_evidence(alert)
 
@@ -592,20 +622,52 @@ def generate_html_report(
         # Keep each alert's timeline in its own report section.
         alert_timelines.append(
             f'''
-            <div class="alert-timeline">
-                <h3>{detection_name}</h3>
+            <div class="alert-timeline {severity_class}">
+                <h3>
+                    <span class="panel-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <path d="M12 8v4"/>
+                            <path d="M12 16h.01"/>
+                        </svg>
+                    </span>
+                    {detection_name}
+                    <span class="severity-badge {severity_class}">
+                        {severity_label}
+                    </span>
+                </h3>
+
 
                 <div class="evidence-grid">
                     {evidence_html}
                 </div>
 
                 <div class="methodology-panel">
-                    <h4>Detection Methodology</h4>
+                    <h4>
+                        <span class="panel-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="11" cy="11" r="7"/>
+                                <path d="m16 16 5 5"/>
+                                <path d="M8 11h6"/>
+                                <path d="M11 8v6"/>
+                            </svg>
+                        </span>
+                        Detection Methodology
+                    </h4>
                     <p>{safe_methodology}</p>
                 </div>
-                
+
                 <div class="interpretation-panel">
-                    <h4>Analyst Interpretation</h4>
+                    <h4>
+                        <span class="panel-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M9 18h6"/>
+                                <path d="M10 22h4"/>
+                                <path d="M9 14a6 6 0 1 1 6 0c-.7.6-1 1.3-1 2H10c0-.7-.3-1.4-1-2z"/>
+                            </svg>
+                        </span>
+                        Analyst Interpretation
+                    </h4>
                     <p>{safe_interpretation}</p>
                 </div>
 
@@ -615,6 +677,7 @@ def generate_html_report(
             </div>
             '''
         )
+
 
     # Combine all individual investigation timelines into
     # one HTML fragment for the report.
@@ -661,7 +724,35 @@ def generate_html_report(
     <title>Authentication Security Analysis Report</title>
 
     <style>
+
         /* ---------- Global Styling ---------- */
+
+        :root {{
+            color-scheme: dark;
+
+            /* Background surfaces */
+            --bg-page: #0b1220;
+            --bg-main: #111c2e;
+            --bg-panel: #19283d;
+            --bg-elevated: #22344c;
+
+            /* Text */
+            --text-primary: #edf3fa;
+            --text-secondary: #b1c0d2;
+            --text-muted: #91a4bb;
+
+            /* Borders */
+            --border-default: #30435c;
+
+            /* Semantic colors */
+            --accent-blue: #79b8ed;
+            --accent-cyan: #70c7dc;
+            --accent-purple: #b9a4f4;
+            --severity-critical: #f08080;
+            --severity-high: #f3ad72;
+            --severity-medium: #f0d27b;
+            --status-success: #75cba8;
+        }}
 
         * {{
             box-sizing: border-box;
@@ -669,8 +760,8 @@ def generate_html_report(
 
         body {{
             margin: 0;
-            background: #f3f5f7;
-            color: #24303d;
+            background: var(--bg-page);
+            color: var(--text-primary);
             font-family:
                 -apple-system,
                 BlinkMacSystemFont,
@@ -684,10 +775,10 @@ def generate_html_report(
             width: min(1180px, calc(100% - 48px));
             margin: 40px auto;
             padding: 48px;
-            background: #ffffff;
-            border: 1px solid #dfe4e8;
-            border-radius: 10px;
-            box-shadow: 0 8px 24px rgba(20, 34, 48, 0.08);
+            background: var(--bg-main);
+            border: 1px solid var(--border-default);
+            border-radius: 14px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
         }}
 
         /* ---------- Report Header ---------- */
@@ -695,12 +786,12 @@ def generate_html_report(
         header {{
             padding-bottom: 28px;
             margin-bottom: 36px;
-            border-bottom: 3px solid #17324d;
+            border-bottom: 1px solid var(--border-default);
         }}
 
         header h1 {{
             margin: 0 0 10px;
-            color: #17324d;
+            color: var(--text-primary);
             font-size: 32px;
             font-weight: 700;
             letter-spacing: -0.5px;
@@ -708,8 +799,43 @@ def generate_html_report(
 
         header p {{
             margin: 0;
-            color: #65717d;
+            color: var(--text-secondary);
             font-size: 16px;
+        }}
+
+        /* ---------- Report Title Icon ---------- */
+
+        .report-title {{
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }}
+
+        .report-title > div {{
+            min-width: 0;
+        }}
+
+        .report-icon {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 60px;
+            height: 60px;
+            color: var(--accent-cyan);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-default);
+            border-radius: 14px;
+        }}
+
+        .report-icon svg {{
+            width: 32px;
+            height: 32px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.7;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }}
 
         /* ---------- Report Sections ---------- */
@@ -719,16 +845,44 @@ def generate_html_report(
         }}
 
         section > h2 {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
             margin: 0 0 20px;
-            color: #17324d;
+            color: var(--text-primary);
             font-size: 22px;
             font-weight: 700;
         }}
 
         .section-description {{
             margin: -8px 0 24px;
-            color: #65717d;
+            color: var(--text-secondary);
             font-size: 14px;
+        }}
+
+        /* ---------- Section Icons ---------- */
+
+        .section-icon {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 36px;
+            height: 36px;
+            color: var(--accent-cyan);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
+        }}
+
+        .section-icon svg {{
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
         }}
 
         /* ---------- Executive Summary ---------- */
@@ -741,27 +895,54 @@ def generate_html_report(
         }}
 
         .summary-card {{
-            min-height: 110px;
-            padding: 20px;
-            background: #f8fafb;
-            border: 1px solid #dfe4e8;
-            border-radius: 8px;
+            position: relative;
+            min-height: 120px;
+            padding: 22px;
+            overflow: hidden;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-default);
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+        }}
+
+        .summary-card::before {{
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-blue);
+        }}
+
+        .summary-card:nth-child(2)::before {{
+            background: var(--accent-cyan);
+        }}
+
+        .summary-card:nth-child(3)::before {{
+            background: var(--accent-purple);
+        }}
+
+        .summary-card:nth-child(4)::before {{
+            background: var(--severity-high);
         }}
 
         .summary-card h3 {{
-            margin: 0 0 10px;
-            color: #65717d;
-            font-size: 13px;
+            margin: 0 0 12px;
+            color: var(--text-secondary);
+            font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.7px;
         }}
 
         .summary-card p {{
             margin: 0;
-            color: #17324d;
-            font-size: 30px;
+            color: var(--text-primary);
+            font-size: 32px;
             font-weight: 700;
+            letter-spacing: -0.5px;
+            font-variant-numeric: tabular-nums;
         }}
 
         /* ---------- Detection Overview ---------- */
@@ -772,9 +953,9 @@ def generate_html_report(
             gap: 20px;
             margin-top: 24px;
             padding: 24px;
-            background: #f8fafb;
-            border: 1px solid #dfe4e8;
-            border-radius: 8px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-default);
+            border-radius: 12px;
         }}
 
         .detection-row {{
@@ -785,7 +966,7 @@ def generate_html_report(
         }}
 
         .detection-label {{
-            color: #24303d;
+            color: var(--text-secondary);
             font-size: 14px;
             font-weight: 600;
         }}
@@ -794,22 +975,38 @@ def generate_html_report(
             width: 100%;
             height: 14px;
             overflow: hidden;
-            background: #e5eaf0;
+            background: var(--bg-elevated);
             border-radius: 7px;
         }}
 
         .bar {{
             height: 100%;
             min-width: 0;
-            background: #416783;
+            background: var(--accent-blue);
             border-radius: 7px;
+            transition: width 0.25s ease;
+        }}
+
+        /* ---------- Detection Category Colors ---------- */
+
+        .detection-brute-force .bar {{
+            background: var(--severity-high);
+        }}
+
+        .detection-password-spraying .bar {{
+            background: var(--accent-cyan);
+        }}
+
+        .detection-success-after-failures .bar {{
+            background: var(--accent-purple);
         }}
 
         .detection-count {{
-            color: #17324d;
+            color: var(--text-primary);
             font-size: 15px;
             font-weight: 700;
             text-align: right;
+            font-variant-numeric: tabular-nums;
         }}
 
         /* ---------- Investigation Cards ---------- */
@@ -817,17 +1014,39 @@ def generate_html_report(
         .alert-timeline {{
             margin-top: 24px;
             padding: 28px;
-            background: #ffffff;
-            border: 1px solid #dfe4e8;
-            border-left: 4px solid #17324d;
-            border-radius: 8px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-default);
+            border-left: 4px solid var(--accent-blue);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
         }}
 
         .alert-timeline > h3 {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
             margin: 0 0 24px;
-            color: #17324d;
+            color: var(--text-primary);
             font-size: 19px;
             font-weight: 700;
+        }}
+
+        /* Reserved for explicit severity classes in the HTML */
+
+        .alert-timeline.severity-critical {{
+            border-left-color: var(--severity-critical);
+        }}
+
+        .alert-timeline.severity-high {{
+            border-left-color: var(--severity-high);
+        }}
+
+        .alert-timeline.severity-medium {{
+            border-left-color: var(--severity-medium);
+        }}
+
+        .alert-timeline.severity-low {{
+            border-left-color: var(--accent-blue);
         }}
 
         /* ---------- Detection Evidence ---------- */
@@ -838,34 +1057,69 @@ def generate_html_report(
                 auto-fit,
                 minmax(200px, 1fr)
             );
-            gap: 20px;
+            gap: 16px;
             margin: 0 0 28px;
             padding: 22px;
-            background: #f8fafb;
-            border: 1px solid #dfe4e8;
-            border-radius: 8px;
+            background: var(--bg-main);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
         }}
 
         .evidence-item {{
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 6px;
             min-width: 0;
+            padding: 14px 16px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: 8px;
         }}
 
         .evidence-label {{
-            color: #65717d;
-            font-size: 12px;
+            color: var(--text-muted);
+            font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.7px;
         }}
 
         .evidence-value {{
-            color: #24303d;
+            color: var(--text-primary);
             font-size: 14px;
             font-weight: 600;
             overflow-wrap: anywhere;
+            font-variant-numeric: tabular-nums;
+        }}
+
+        /* Optional emphasis for security-relevant values */
+
+        .evidence-value.highlight {{
+            color: var(--accent-cyan);
+        }}
+
+        .evidence-value.warning {{
+            color: var(--severity-high);
+        }}
+
+        /* ---------- Analysis Information Layout ---------- */
+
+        /* Give long metadata values more horizontal space. */
+        .analysis-info-grid {{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }}
+
+        /* Allow the analysis date and observation period to remain readable. */
+        .analysis-info-grid .evidence-value {{
+            overflow-wrap: normal;
+            word-break: normal;
+        }}
+
+        /* Stack metadata fields on smaller screens. */
+        @media (max-width: 650px) {{
+            .analysis-info-grid {{
+                grid-template-columns: 1fr;
+            }}
         }}
 
         /* ---------- Methodology and Interpretation ---------- */
@@ -873,24 +1127,27 @@ def generate_html_report(
         .methodology-panel,
         .interpretation-panel {{
             margin-bottom: 24px;
-            padding: 20px 22px;
-            background: #f8fafb;
-            border: 1px solid #dfe4e8;
-            border-radius: 8px;
+            padding: 22px 24px;
+            background: var(--bg-main);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
         }}
 
         .methodology-panel {{
-            border-left: 3px solid #416783;
+            border-left: 3px solid var(--accent-blue);
         }}
 
         .interpretation-panel {{
-            border-left: 3px solid #66788a;
+            border-left: 3px solid var(--accent-purple);
         }}
 
         .methodology-panel h4,
         .interpretation-panel h4 {{
-            margin: 0 0 10px;
-            color: #17324d;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 12px;
+            color: var(--text-primary);
             font-size: 15px;
             font-weight: 700;
         }}
@@ -898,9 +1155,87 @@ def generate_html_report(
         .methodology-panel p,
         .interpretation-panel p {{
             margin: 0;
-            color: #52606d;
+            color: var(--text-secondary);
             font-size: 14px;
-            line-height: 1.65;
+            line-height: 1.7;
+        }}
+
+        /* Icon styling for methodology and interpretation */
+
+        .methodology-panel .panel-icon {{
+            color: var(--accent-blue);
+        }}
+
+        .interpretation-panel .panel-icon {{
+            color: var(--accent-purple);
+        }}
+
+        .panel-icon {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 20px;
+            height: 20px;
+        }}
+
+        .panel-icon svg {{
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }}
+
+        /* ---------- Investigation Heading Icon ---------- */
+
+        .alert-timeline > h3 .panel-icon {{
+            color: var(--accent-cyan);
+        }}
+
+        .alert-timeline > h3 .panel-icon svg {{
+            width: 20px;
+            height: 20px;
+        }}
+
+        /* ---------- Severity Badges ---------- */
+
+        .severity-badge {{
+            display: inline-flex;
+            align-items: center;
+            margin-left: auto;
+            padding: 5px 10px;
+            color: var(--text-secondary);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }}
+
+        .severity-badge.severity-critical {{
+            color: var(--severity-critical);
+            border-color: var(--severity-critical);
+        }}
+
+        .severity-badge.severity-high {{
+            color: var(--severity-high);
+            border-color: var(--severity-high);
+        }}
+
+        .severity-badge.severity-medium {{
+            color: var(--severity-medium);
+            border-color: var(--severity-medium);
+        }}
+
+        .severity-badge.severity-low {{
+            color: var(--accent-blue);
+            border-color: var(--accent-blue);
         }}
 
         /* ---------- Authentication Timeline ---------- */
@@ -909,7 +1244,7 @@ def generate_html_report(
             position: relative;
             margin-top: 28px;
             padding-left: 24px;
-            border-left: 2px solid #dfe4e8;
+            border-left: 2px solid var(--border-default);
         }}
 
         .alert-timeline > .timeline {{
@@ -931,42 +1266,53 @@ def generate_html_report(
             left: -31px;
             width: 12px;
             height: 12px;
-            background: #66788a;
-            border: 2px solid #ffffff;
+            background: var(--text-muted);
+            border: 2px solid var(--bg-panel);
             border-radius: 50%;
-            box-shadow: 0 0 0 2px #dfe4e8;
+            box-shadow: 0 0 0 2px var(--border-default);
         }}
 
+        /* Authentication outcomes */
+
         .timeline-event.failure .timeline-marker {{
-            background: #b54747;
+            background: var(--severity-critical);
         }}
 
         .timeline-event.success .timeline-marker {{
-            background: #2f7d5a;
+            background: var(--status-success);
         }}
 
         .timeline-content {{
-            padding: 14px 16px;
-            background: #f8fafb;
-            border: 1px solid #dfe4e8;
-            border-radius: 8px;
+            padding: 16px 18px;
+            background: var(--bg-main);
+            border: 1px solid var(--border-default);
+            border-radius: 10px;
+        }}
+
+        .timeline-event.failure .timeline-content {{
+            border-left: 3px solid var(--severity-critical);
+        }}
+
+        .timeline-event.success .timeline-content {{
+            border-left: 3px solid var(--status-success);
         }}
 
         .timeline-time {{
-            margin-bottom: 4px;
-            color: #65717d;
+            margin-bottom: 6px;
+            color: var(--text-muted);
             font-size: 12px;
+            font-variant-numeric: tabular-nums;
         }}
 
         .timeline-title {{
-            color: #17324d;
+            color: var(--text-primary);
             font-size: 15px;
             font-weight: 600;
         }}
 
         .timeline-source {{
-            margin-top: 4px;
-            color: #65717d;
+            margin-top: 6px;
+            color: var(--text-secondary);
             font-size: 13px;
         }}
 
@@ -1013,6 +1359,14 @@ def generate_html_report(
             .evidence-grid {{
                 grid-template-columns: 1fr;
             }}
+
+            .alert-timeline > h3 {{
+                flex-wrap: wrap;
+            }}
+
+            .severity-badge {{
+                margin-left: 0;
+            }}
         }}
     </style>
 </head>
@@ -1023,19 +1377,42 @@ def generate_html_report(
         <!-- ---------- Report Header ---------- -->
 
         <header>
-            <h1>Authentication Security Analysis Report</h1>
-            <p>
-                Security analysis of structured authentication events
-                using rule-based anomaly detection.
-            </p>
+            <div class="report-title">
+                <span class="report-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M12 8v4"/>
+                        <path d="M12 16h.01"/>
+                    </svg>
+                </span>
+
+                <div>
+                    <h1>Authentication Security Analysis Report</h1>
+                    <p>
+                        Security analysis of structured authentication events
+                        using rule-based anomaly detection.
+                    </p>
+                </div>
+            </div>
         </header>
 
                 <!-- ---------- Analysis Information ---------- -->
 
         <section>
-            <h2>Analysis Information</h2>
+            <h2>
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h7"/>
+                        <path d="M14 2v6h6"/>
+                        <path d="M14 2l6 6"/>
+                        <circle cx="16" cy="16" r="3"/>
+                        <path d="m18.2 18.2 3 3"/>
+                    </svg>
+                </span>
+                Analysis Information
+            </h2>
 
-            <div class="evidence-grid">
+            <div class="evidence-grid analysis-info-grid">
 
                 <div class="evidence-item">
                     <span class="evidence-label">Analysis Date</span>
@@ -1068,7 +1445,19 @@ def generate_html_report(
         <!-- ---------- Detection Configuration ---------- -->
 
         <section>
-            <h2>Detection Configuration</h2>
+            <h2>
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 7h9"/>
+                        <path d="M17 7h3"/>
+                        <circle cx="15" cy="7" r="2"/>
+                        <path d="M4 17h3"/>
+                        <path d="M11 17h9"/>
+                        <circle cx="9" cy="17" r="2"/>
+                    </svg>
+                </span>
+                Detection Configuration
+            </h2>
 
             <p class="section-description">
                 Detection thresholds and time windows used during
@@ -1083,7 +1472,17 @@ def generate_html_report(
         <!-- ---------- Executive Summary ---------- -->
 
         <section>
-            <h2>Executive Summary</h2>
+            <h2>
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M3 3v18h18"/>
+                        <path d="M7 16v-4"/>
+                        <path d="M12 16V8"/>
+                        <path d="M17 16V5"/>
+                    </svg>
+                </span>
+                Executive Summary
+            </h2>
 
             <div class="summary-grid">
 
@@ -1113,7 +1512,16 @@ def generate_html_report(
         <!-- ---------- Detection Overview ---------- -->
 
         <section>
-            <h2>Detection Overview</h2>
+            <h2>
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M12 8v4"/>
+                        <path d="M12 16h.01"/>
+                    </svg>
+                </span>
+                Detection Overview
+            </h2>
 
             <p class="section-description">
                 Alerts generated by each authentication anomaly
@@ -1123,7 +1531,7 @@ def generate_html_report(
             <div class="detection-chart">
 
                 <div class="detection-row">
-                    <div class="detection-label">
+                    <div class="detection-row detection-brute-force">
                         Brute Force
                     </div>
 
@@ -1140,7 +1548,7 @@ def generate_html_report(
                 </div>
 
                 <div class="detection-row">
-                    <div class="detection-label">
+                    <div class="detection-row detection-password-spraying">
                         Password Spraying
                     </div>
 
@@ -1157,7 +1565,7 @@ def generate_html_report(
                 </div>
 
                 <div class="detection-row">
-                    <div class="detection-label">
+                    <div class="detection-row detection-success-after-failures">
                         Success After Failures
                     </div>
 
@@ -1179,7 +1587,15 @@ def generate_html_report(
         <!-- ---------- Authentication Investigations ---------- -->
 
         <section>
-            <h2>Authentication Event Timeline</h2>
+            <h2>
+                <span class="section-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M12 7v5l3 2"/>
+                    </svg>
+                </span>
+                Authentication Event Timeline
+            </h2>
 
             <p class="section-description">
                 Authentication activity associated with each generated
@@ -1197,10 +1613,11 @@ def generate_html_report(
 </html>
 '''
 
-    # Write the complete report as a UTF-8 encoded HTML file.
-    output_path.write_text(
-        html,
-        encoding='utf-8'
-    )
+    # Remove trailing whitespace from every generated HTML line.
+    # Preserve the HTML structure and ensure the file ends with one newline.
+    html = '\n'.join(
+        line.rstrip()
+        for line in html.splitlines()
+    ) + '\n'
 
-
+    output_path.write_text(html, encoding='utf-8')
