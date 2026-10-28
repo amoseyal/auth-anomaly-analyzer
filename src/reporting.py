@@ -370,13 +370,74 @@ def build_detection_evidence(alert):
 
     return evidence
 
-def generate_html_report(auth_logs, alerts, output_path, source_path=None):
+def generate_html_report(
+        auth_logs,
+        alerts,
+        output_path,
+        source_path=None,
+        detection_config=None
+        ):
     '''
     Generate a self-contained HTML authentication security report.
 
     The report summarizes the completed authentication analysis and
     presents the results in a format suitable for analyst review.
     '''
+
+    # Prepare the detection configuration for report presentation.
+    # Preserve the distinction between explicitly supplied settings
+    # and configurations that were not provided by the caller.
+    if detection_config is None:
+        detection_settings = None
+    else:
+        detection_settings = {
+            'Brute Force': detection_config['brute_force'],
+            'Password Spraying': detection_config['password_spraying'],
+            'Success After Failures': detection_config['success_after_failures']
+        }
+
+    # Build the HTML representation of the detection configuration.
+    # Display the actual settings supplied by the analyzer.
+    configuration_rows = []
+
+    if detection_settings is not None:
+        for detection_name, settings in detection_settings.items():
+
+            # Escape configuration values before inserting them into HTML.
+            safe_name = escape_html_value(detection_name)
+            safe_threshold = escape_html_value(settings['threshold'])
+            safe_window = escape_html_value(settings['window'])
+
+            # Present each rule's threshold and time window.
+            configuration_rows.append(
+                f'''
+                <div class="evidence-item">
+                    <span class="evidence-label">{safe_name}</span>
+                    <span class="evidence-value">
+                        Threshold: {safe_threshold}
+                    </span>
+                    <span class="evidence-value">
+                        Window: {safe_window}
+                    </span>
+                </div>
+                '''
+            )
+
+    else:
+        # Do not assume default settings when no configuration
+        # was explicitly supplied to the report generator.
+        configuration_rows.append(
+            '''
+            <div class="evidence-item">
+                <span class="evidence-value">
+                    Detection configuration was not provided.
+                </span>
+            </div>
+            '''
+        )
+
+    # Combine the configuration entries into one HTML fragment.
+    configuration_html = '\n'.join(configuration_rows)
 
     # Normalize the output path so the function can accept either
     # a Path object or a path-like string.
@@ -1001,6 +1062,21 @@ def generate_html_report(auth_logs, alerts, output_path, source_path=None):
                     <span class="evidence-value">{detection_methodology}</span>
                 </div>
 
+            </div>
+        </section>
+
+        <!-- ---------- Detection Configuration ---------- -->
+
+        <section>
+            <h2>Detection Configuration</h2>
+
+            <p class="section-description">
+                Detection thresholds and time windows used during
+                this authentication security analysis.
+            </p>
+
+            <div class="evidence-grid">
+                {configuration_html}
             </div>
         </section>
 

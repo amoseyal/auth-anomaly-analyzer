@@ -163,6 +163,135 @@ def test_brute_force_does_not_combine_usernames():
 
     assert len(alerts) == 0
 
+def test_brute_force_custom_threshold():
+    '''
+    A custom threshold of three failures should trigger an alert
+    even though the default threshold requires five.
+    '''
+
+    test_data = pd.DataFrame(
+        {
+            'timestamp': pd.to_datetime(
+                [
+                    '2026-09-20 22:14:03',
+                    '2026-09-20 22:14:18',
+                    '2026-09-20 22:14:32'
+                ]
+            ),
+            'username': ['jdoe'] * 3,
+            'source_ip': ['185.72.14.91'] * 3,
+            'status': ['failure'] * 3
+        }
+    )
+
+    # Three failures should not meet the default threshold of five.
+    default_alerts = detect_brute_force(test_data)
+
+    assert len(default_alerts) == 0
+
+    # Lowering the threshold to three should trigger an alert.
+    custom_alerts = detect_brute_force(
+        test_data,
+        threshold=3
+    )
+
+    assert len(custom_alerts) == 1
+    assert custom_alerts[0]['detection'] == 'brute_force'
+    assert custom_alerts[0]['failure_count'] == 3
+    assert custom_alerts[0]['window'] == '10min'
+
+def test_brute_force_custom_time_window():
+    '''
+    Five failures spread over twenty minutes should trigger an
+    alert with a thirty-minute window, but not the default
+    ten-minute window.
+    '''
+
+    test_data = pd.DataFrame(
+        {
+            'timestamp': pd.to_datetime(
+                [
+                    '2026-09-20 20:00:00',
+                    '2026-09-20 20:05:00',
+                    '2026-09-20 20:10:00',
+                    '2026-09-20 20:15:00',
+                    '2026-09-20 20:20:00'
+                ]
+            ),
+            'username': ['jdoe'] * 5,
+            'source_ip': ['185.72.14.91'] * 5,
+            'status': ['failure'] * 5
+        }
+    )
+
+    # The default ten-minute window should not trigger an alert.
+    default_alerts = detect_brute_force(test_data)
+
+    assert len(default_alerts) == 0
+
+    # A thirty-minute window should include all five failures.
+    custom_alerts = detect_brute_force(
+        test_data,
+        window='30min'
+    )
+
+    assert len(custom_alerts) == 1
+
+    alert = custom_alerts[0]
+
+    assert alert['detection'] == 'brute_force'
+    assert alert['failure_count'] == 5
+    assert alert['window'] == '30min'
+    assert alert['first_failure'] == pd.Timestamp(
+        '2026-09-20 20:00:00'
+    )
+    assert alert['last_failure'] == pd.Timestamp(
+        '2026-09-20 20:20:00'
+    )
+
+@pytest.mark.parametrize(
+    'invalid_threshold',
+    [0, -1, 2.5, '5', True, None]
+)
+def test_brute_force_rejects_invalid_threshold(invalid_threshold):
+    '''
+    Reject thresholds that are not positive integers.
+    '''
+
+    # An empty DataFrame is sufficient because parameter validation
+    # must happen before authentication events are processed.
+    test_data = pd.DataFrame()
+
+    with pytest.raises(
+        ValueError,
+        match='Detection threshold must be a positive integer'
+    ):
+        detect_brute_force(
+            test_data,
+            threshold=invalid_threshold
+        )
+
+@pytest.mark.parametrize(
+    'invalid_window',
+    ['abc', '0min', '-5min', '', None]
+)
+def test_brute_force_rejects_invalid_window(invalid_window):
+    '''
+    Reject time windows that are invalid or not positive.
+    '''
+
+    # Validation should occur before authentication events
+    # are processed, so no event data is necessary.
+    test_data = pd.DataFrame()
+
+    with pytest.raises(
+        ValueError,
+        match='Detection window must'
+    ):
+        detect_brute_force(
+            test_data,
+            window=invalid_window
+        )
 
 # Password-spraying detection tests
 
@@ -242,6 +371,155 @@ def test_password_spraying_not_detected_same_username():
 
     assert len(alerts) == 0
 
+def test_password_spraying_custom_threshold():
+    '''
+    Three distinct accounts targeted from one source IP should
+    trigger an alert when the threshold is reduced to three.
+    '''
+
+    test_data = pd.DataFrame(
+        {
+            'timestamp': pd.to_datetime(
+                [
+                    '2026-09-20 22:14:03',
+                    '2026-09-20 22:14:18',
+                    '2026-09-20 22:14:32'
+                ]
+            ),
+            'username': ['jdoe', 'asmith', 'mchen'],
+            'source_ip': ['185.72.14.91'] * 3,
+            'status': ['failure'] * 3
+        }
+    )
+
+    # Three distinct usernames do not meet the default threshold.
+    default_alerts = detect_password_spraying(test_data)
+
+    assert len(default_alerts) == 0
+
+    # A custom threshold of three should trigger detection.
+    custom_alerts = detect_password_spraying(
+        test_data,
+        threshold=3
+    )
+
+    assert len(custom_alerts) == 1
+
+    alert = custom_alerts[0]
+
+    assert alert['detection'] == 'password_spraying'
+    assert alert['source_ip'] == '185.72.14.91'
+    assert alert['unique_user_count'] == 3
+    assert set(alert['usernames']) == {'jdoe', 'asmith', 'mchen'}
+    assert alert['window'] == '10min'
+
+def test_password_spraying_custom_time_window():
+    '''
+    Five distinct accounts targeted over twenty minutes should
+    trigger an alert with a thirty-minute detection window,
+    but not with the default ten-minute window.
+    '''
+
+    test_data = pd.DataFrame(
+        {
+            'timestamp': pd.to_datetime(
+                [
+                    '2026-09-20 20:00:00',
+                    '2026-09-20 20:05:00',
+                    '2026-09-20 20:10:00',
+                    '2026-09-20 20:15:00',
+                    '2026-09-20 20:20:00'
+                ]
+            ),
+            'username': [
+                'jdoe',
+                'asmith',
+                'mchen',
+                'sgarcia',
+                'bsmith'
+            ],
+            'source_ip': ['185.72.14.91'] * 5,
+            'status': ['failure'] * 5
+        }
+    )
+
+    # The default ten-minute window should not trigger an alert.
+    default_alerts = detect_password_spraying(test_data)
+
+    assert len(default_alerts) == 0
+
+    # A thirty-minute window includes all five targeted accounts.
+    custom_alerts = detect_password_spraying(
+        test_data,
+        window='30min'
+    )
+
+    assert len(custom_alerts) == 1
+
+    alert = custom_alerts[0]
+
+    assert alert['detection'] == 'password_spraying'
+    assert alert['source_ip'] == '185.72.14.91'
+    assert alert['unique_user_count'] == 5
+    assert set(alert['usernames']) == {
+        'jdoe',
+        'asmith',
+        'mchen',
+        'sgarcia',
+        'bsmith'
+    }
+    assert alert['window'] == '30min'
+    assert alert['first_failure'] == pd.Timestamp(
+        '2026-09-20 20:00:00'
+    )
+    assert alert['last_failure'] == pd.Timestamp(
+        '2026-09-20 20:20:00'
+    )
+
+@pytest.mark.parametrize(
+    'invalid_threshold',
+    [0, -1, 2.5, '5', True, None]
+)
+def test_password_spraying_rejects_invalid_threshold(invalid_threshold):
+    '''
+    Reject password-spraying thresholds that are not
+    positive integers.
+    '''
+
+    # Parameter validation should occur before processing events.
+    test_data = pd.DataFrame()
+
+    with pytest.raises(
+        ValueError,
+        match='Detection threshold must be a positive integer'
+    ):
+        detect_password_spraying(
+            test_data,
+            threshold=invalid_threshold
+        )
+
+@pytest.mark.parametrize(
+    'invalid_window',
+    ['abc', '0min', '-5min', '', None]
+)
+def test_password_spraying_rejects_invalid_window(invalid_window):
+    '''
+    Reject password-spraying detection windows that are
+    invalid, zero-length, or negative.
+    '''
+
+    # Validation must occur before authentication events
+    # are processed, so an empty DataFrame is sufficient.
+    test_data = pd.DataFrame()
+
+    with pytest.raises(
+        ValueError,
+        match='Detection window must'
+    ):
+        detect_password_spraying(
+            test_data,
+            window=invalid_window
+        )
 
 # Successful-login-after-failures detection tests
 
@@ -284,6 +562,161 @@ def test_success_after_failures_detected():
     assert alerts[0]['success_time'] == pd.Timestamp(
         '2026-09-20 22:15:36'
     )
+
+
+def test_success_after_failures_custom_threshold():
+    '''
+    Three failures followed by a successful login should trigger
+    an alert when the threshold is reduced to three.
+    '''
+
+    test_data = pd.DataFrame(
+        {
+            'timestamp': pd.to_datetime(
+                [
+                    '2026-09-20 22:14:03',
+                    '2026-09-20 22:14:18',
+                    '2026-09-20 22:14:32',
+                    '2026-09-20 22:15:00'
+                ]
+            ),
+            'username': ['jdoe'] * 4,
+            'source_ip': ['185.72.14.91'] * 4,
+            'status': [
+                'failure',
+                'failure',
+                'failure',
+                'success'
+            ]
+        }
+    )
+
+    # Three failures do not meet the default threshold of five.
+    default_alerts = detect_success_after_failures(test_data)
+
+    assert len(default_alerts) == 0
+
+    # A threshold of three should identify the suspicious login.
+    custom_alerts = detect_success_after_failures(
+        test_data,
+        threshold=3
+    )
+
+    assert len(custom_alerts) == 1
+
+    alert = custom_alerts[0]
+
+    assert alert['detection'] == 'success_after_failures'
+    assert alert['severity'] == 'high'
+    assert alert['username'] == 'jdoe'
+    assert alert['source_ip'] == '185.72.14.91'
+    assert alert['failure_count'] == 3
+    assert alert['window'] == '10min'
+    assert alert['success_time'] == pd.Timestamp(
+        '2026-09-20 22:15:00'
+    )
+
+
+def test_success_after_failures_custom_time_window():
+    '''
+    Five failures followed by a successful login should trigger
+    an alert with a thirty-minute window, but not the default
+    ten-minute window.
+    '''
+
+    test_data = pd.DataFrame(
+        {
+            'timestamp': pd.to_datetime(
+                [
+                    '2026-09-20 20:00:00',
+                    '2026-09-20 20:05:00',
+                    '2026-09-20 20:10:00',
+                    '2026-09-20 20:15:00',
+                    '2026-09-20 20:20:00',
+                    '2026-09-20 20:25:00'
+                ]
+            ),
+            'username': ['jdoe'] * 6,
+            'source_ip': ['185.72.14.91'] * 6,
+            'status': ['failure'] * 5 + ['success']
+        }
+    )
+
+    # The default ten-minute window should not trigger an alert.
+    default_alerts = detect_success_after_failures(test_data)
+
+    assert len(default_alerts) == 0
+
+    # A thirty-minute window includes all five preceding failures.
+    custom_alerts = detect_success_after_failures(
+        test_data,
+        window='30min'
+    )
+
+    assert len(custom_alerts) == 1
+
+    alert = custom_alerts[0]
+
+    assert alert['detection'] == 'success_after_failures'
+    assert alert['failure_count'] == 5
+    assert alert['window'] == '30min'
+    assert alert['first_failure'] == pd.Timestamp(
+        '2026-09-20 20:00:00'
+    )
+    assert alert['last_failure'] == pd.Timestamp(
+        '2026-09-20 20:20:00'
+    )
+    assert alert['success_time'] == pd.Timestamp(
+        '2026-09-20 20:25:00'
+    )
+
+
+@pytest.mark.parametrize(
+    'invalid_threshold',
+    [0, -1, 2.5, '5', True, None]
+)
+def test_success_after_failures_rejects_invalid_threshold(invalid_threshold):
+    '''
+    Reject successful-login detection thresholds that are
+    not positive integers.
+    '''
+
+    # Validation must occur before authentication events
+    # are processed, so an empty DataFrame is sufficient.
+    test_data = pd.DataFrame()
+
+    with pytest.raises(
+        ValueError,
+        match='Detection threshold must be a positive integer'
+    ):
+        detect_success_after_failures(
+            test_data,
+            threshold=invalid_threshold
+        )
+
+
+@pytest.mark.parametrize(
+    'invalid_window',
+    ['abc', '0min', '-5min', '', None]
+)
+def test_success_after_failures_rejects_invalid_window(invalid_window):
+    '''
+    Reject successful-login detection windows that are
+    invalid, zero-length, or negative.
+    '''
+
+    # Validation must occur before authentication events
+    # are processed, so an empty DataFrame is sufficient.
+    test_data = pd.DataFrame()
+
+    with pytest.raises(
+        ValueError,
+        match='Detection window must'
+    ):
+        detect_success_after_failures(
+            test_data,
+            window=invalid_window
+        )
 
 
 # Authentication log validation tests
