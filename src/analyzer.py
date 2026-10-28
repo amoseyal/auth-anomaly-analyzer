@@ -43,19 +43,71 @@ def parse_arguments():
         '--input',
         type = Path,
         default = DATA_FILE,
-        help = 'path to the authentication log CSV file.'
+        help = 'path to the authentication log CSV file'
     )
 
     parser.add_argument(
         '--output',
         type = Path,
-        help = 'optional path for exporting detected alerts as a CSV file.'
+        help = 'optional path for exporting detected alerts as a CSV file'
     )
 
     parser.add_argument(
         '--html',
         type=Path,
-        help='optional path for generating an HTML security analysis report.'
+        help='optional path for generating an HTML security analysis report'
+    )
+
+    # Configure the minimum number of failed authentication attempts
+    # required to trigger brute-force detection.
+    parser.add_argument(
+        '--brute-force-threshold',
+        type=int,
+        default=BRUTE_FORCE_THRESHOLD,
+        help='minimum failed attempts required for brute-force detection'
+    )
+
+    # Configure the rolling time window used for brute-force detectiong.
+    parser.add_argument(
+        '--brute-force-window',
+        type=str,
+        default=BRUTE_FORCE_WINDOW,
+        help='brute-force detection window (e.g., 10min, 30min, 1h)'
+    )
+
+    # Configure the minimum number of distinct accounts targeted
+    # from one source IP required to trigger password-spraying detection.
+    parser.add_argument(
+        '--password-spray-threshold',
+        type=int,
+        default=PASSWORD_SPRAY_THRESHOLD,
+        help='minimum distinct accounts required for password-spraying detection'
+    )
+
+    # Configure the minimum time window used for password-spraying detection.
+    parser.add_argument(
+        '--password-spray-window',
+        type=str,
+        default=PASSWORD_SPRAY_WINDOW,
+        help='password-spraying detection window (e.g., 10min, 30min, 1h)'
+    )
+
+    # Configure the minimum number os preceding failed attempts
+    # required to flag a subsequent successful login.
+    parser.add_argument(
+        '--success-after-failures-threshold',
+        type=int,
+        default=SUCCESS_AFTER_FAILURES_THRESHOLD,
+        help='minimum preceding failures required to flag a successful login'
+    )
+
+    # Configure how far back to examine failed attempts
+    # before a successful authentication event.
+    parser.add_argument(
+        '--success-after-failures-window',
+        type=str,
+        default=SUCCESS_AFTER_FAILURES_WINDOW,
+        help='detection window before a successful login (e.g., 10min, 30min, 1h)'
     )
 
     return parser.parse_args()
@@ -139,7 +191,42 @@ def load_auth_logs(filepath):
     return df
 
 
-def detect_brute_force(auth_logs):
+def validate_detection_parameters(threshold, window):
+    '''
+    Validate the threshold and time window used by a detection rule.
+
+    Thresholds must be positive integers, and time windows must
+    represent positive durations.
+    '''
+
+    # Reject booleans because bool is a subclass of int in Python.
+    if type(threshold) is not int or threshold < 1:
+        raise ValueError(
+            'Detection threshold must be a positive integer.'
+        )
+
+    # Convert the supplied window into a pandas duration.
+    try:
+        duration = pd.Timedelta(window)
+    except (ValueError, TypeError) as error:
+        raise ValueError(
+            'Detection window must be a valid time duration.'
+        ) from error
+
+    # A zero or negative duration is not meaningful for detection.
+    if pd.isna(duration) or duration <= pd.Timedelta(0):
+        raise ValueError(
+            'Detection window must be greater than zero.'
+        )
+
+    return duration
+
+
+def detect_brute_force(
+        auth_logs,
+        threshold=BRUTE_FORCE_THRESHOLD,
+        window=BRUTE_FORCE_WINDOW
+        ):
     '''
     Identify potential brute-force authentication attempts.
 
@@ -147,6 +234,9 @@ def detect_brute_force(auth_logs):
     username and source IP so repeated attempts against the same
     account from the same source can be analyzed together.
     '''
+
+    # Validate configuration before processing authentication events.
+    validate_detection_parameters(threshold, window)
 
     alerts = []
 
@@ -168,13 +258,13 @@ def detect_brute_force(auth_logs):
 
         rolling_failures = (
             timed_group['status']
-            .rolling(BRUTE_FORCE_WINDOW)
+            .rolling(window)
             .count()
         )
 
         # Identify points where the configured failure threshold
         # is reached within the rolling time window.
-        threshold_reached = rolling_failures >= BRUTE_FORCE_THRESHOLD
+        threshold_reached = rolling_failures >= threshold
 
         if threshold_reached.any():
 
@@ -186,7 +276,7 @@ def detect_brute_force(auth_logs):
 
             # Calculate the beginning of the rolling detection window.
             window_start = detection_time - pd.Timedelta(
-                BRUTE_FORCE_WINDOW
+                window
             )
 
             # Isolate only the failures that contributed to the
@@ -202,7 +292,7 @@ def detect_brute_force(auth_logs):
                 'username': username,
                 'source_ip': source_ip,
                 'failure_count': len(detected_window),
-                'window': BRUTE_FORCE_WINDOW,
+                'window': window,
                 'first_failure': detected_window['timestamp'].min(),
                 'last_failure': detected_window['timestamp'].max(),
             }
@@ -212,7 +302,11 @@ def detect_brute_force(auth_logs):
     return alerts
 
 
-def detect_password_spraying(auth_logs):
+def detect_password_spraying(
+        auth_logs,
+        threshold=PASSWORD_SPRAY_THRESHOLD,
+        window=PASSWORD_SPRAY_WINDOW
+        ):
     '''
     Identify potential password-spraying attempts.
     
@@ -220,6 +314,9 @@ def detect_password_spraying(auth_logs):
     activity against multipole accounts from the same source
     can be analyzed together.
     '''
+
+    # Validate configuration before analyzing authentication events.
+    validate_detection_parameters(threshold, window)
 
     alerts = []
 
@@ -243,7 +340,7 @@ def detect_password_spraying(auth_logs):
 
             # Calculate the beginning of the detection window.
             window_start = detection_time - pd.Timedelta(
-                PASSWORD_SPRAY_WINDOW
+                window
             )
 
             # Select failures from this source IP that occurred
@@ -259,7 +356,7 @@ def detect_password_spraying(auth_logs):
 
                         # Trigger an alert when the number of distinct targeted
             # accounts reaches the configured threshold.
-            if unique_user_count >= PASSWORD_SPRAY_THRESHOLD:
+            if unique_user_count >= threshold:
 
                 alert = {
                     'detection': 'password_spraying',
@@ -267,7 +364,7 @@ def detect_password_spraying(auth_logs):
                     'source_ip': source_ip,
                     'unique_user_count': unique_user_count,
                     'usernames': detected_window['username'].unique().tolist(),
-                    'window': PASSWORD_SPRAY_WINDOW,
+                    'window': window,
                     'first_failure': detected_window['timestamp'].min(),
                     'last_failure': detected_window['timestamp'].max()
                 }
@@ -281,7 +378,11 @@ def detect_password_spraying(auth_logs):
     return alerts
 
 
-def detect_success_after_failures(auth_logs):
+def detect_success_after_failures(
+        auth_logs,
+        threshold=SUCCESS_AFTER_FAILURES_THRESHOLD,
+        window=SUCCESS_AFTER_FAILURES_WINDOW
+        ):
     '''
     Identify successful logins following repeated authentication failures.
 
@@ -289,6 +390,9 @@ def detect_success_after_failures(auth_logs):
     successful logins can be evaluated against preceding failures
     from the same source targeting the same account.
     '''
+
+    # Validate configuration before processing authentication events.
+    validate_detection_parameters(threshold, window)
 
     alerts = []
 
@@ -312,7 +416,7 @@ def detect_success_after_failures(auth_logs):
 
             # Calculate the beginning of the detection window.
             window_start = success_time - pd.Timedelta(
-                SUCCESS_AFTER_FAILURES_WINDOW
+                window
             )
 
             # Select failed authentication attempts that occurred
@@ -327,7 +431,7 @@ def detect_success_after_failures(auth_logs):
 
             # Trigger an alert when the number of preceding failures
             # reaches the configured threshold.
-            if failure_count >= SUCCESS_AFTER_FAILURES_THRESHOLD:
+            if failure_count >= threshold:
 
                 alert = {
                     'detection': 'success_after_failures',
@@ -335,7 +439,7 @@ def detect_success_after_failures(auth_logs):
                     'username': username,
                     'source_ip': source_ip,
                     'failure_count': failure_count,
-                    'window': SUCCESS_AFTER_FAILURES_WINDOW,
+                    'window': window,
                     'first_failure': preceding_failures['timestamp'].min(),
                     'last_failure': preceding_failures['timestamp'].max(),
                     'success_time': success_time
@@ -429,15 +533,34 @@ def main():
 
     except FileNotFoundError:
         print(f"Error: input file '{args.input}' was not found.")
-        return
+        return 1
     except ValueError as error:
         print(f'Error: {error}')
-        return
+        return 1
 
-    # Run each detection rule against the authentication logs.
-    brute_force_alerts = detect_brute_force(auth_logs)
-    password_spray_alerts = detect_password_spraying(auth_logs)
-    success_after_failure_alerts = detect_success_after_failures(auth_logs)
+    # Run each detection rule against the authentication logs:
+    try:
+        brute_force_alerts = detect_brute_force(
+            auth_logs,
+            threshold=args.brute_force_threshold,
+            window=args.brute_force_window
+        )
+
+        password_spray_alerts = detect_password_spraying(
+            auth_logs,
+            threshold=args.password_spray_threshold,
+            window=args.password_spray_window
+        )
+
+        success_after_failure_alerts = detect_success_after_failures(
+            auth_logs,
+            threshold=args.success_after_failures_threshold,
+            window=args.success_after_failures_window
+        )
+
+    except ValueError as error:
+        print(f'Error: {error}')
+        return 1
 
     # Combine findings from all detection rules.
     alerts = (
@@ -455,15 +578,37 @@ def main():
     if args.html:
         from src.reporting import generate_html_report
 
+        # Record the detection parameters used during this analysis.
+        # This allows the report to document the actual configuration.
+        detection_config = {
+            'brute_force': {
+                'threshold': args.brute_force_threshold,
+                'window': args.brute_force_window
+            },
+            'password_spraying': {
+                'threshold': args.password_spray_threshold,
+                'window': args.password_spray_window
+            },
+            'success_after_failures': {
+                'threshold': args.success_after_failures_threshold,
+                'window': args.success_after_failures_window
+            }
+        }
+
+        # Pass the authentication data, alerts, and detection settings
+        # to the HTML report generator.
         generate_html_report(
             auth_logs,
             alerts,
             args.html,
-            source_path=args.input
+            source_path=args.input,
+            detection_config=detection_config
         )
 
         print(f'HTML security report generated: {args.html}')
 
+    # Indicate that the authentication analysis completed successfully.
+    return 0
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

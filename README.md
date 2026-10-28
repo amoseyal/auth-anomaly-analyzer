@@ -1,12 +1,14 @@
 # Authentication Anomaly Analyzer
 
-A Python-based security analytics tool for detecting suspicious authentication activity through time-window analysis and event correlation.
+A Python-based security analytics tool for detecting suspicious authentication activity through configurable time-window analysis and event correlation.
 
-The analyzer processes structured authentication logs and identifies brute-force activity, password spraying, and successful logins following repeated authentication failures. Detection results are presented as structured security alerts in the terminal, with optional CSV export and a self-contained HTML security analysis report.
+The analyzer processes structured authentication logs and identifies brute-force activity, password spraying, and successful logins following repeated authentication failures. Detection thresholds and time windows can be customized through command-line arguments, allowing analysts to adjust detection sensitivity for different security monitoring scenarios.
 
-The HTML report provides an executive summary, detection overview, investigation findings, supporting event evidence, and chronological authentication timelines.
+Detection results are presented as structured security alerts in the terminal, with optional CSV export and a self-contained HTML security analysis report.
 
-Built with **Python**, **pandas**, and **pytest**, with **51 automated tests** covering detection logic, input validation, reporting, command-line integration, and end-to-end processing.
+The HTML report provides an executive summary, detection configuration, detection overview, investigation findings, supporting event evidence, and chronological authentication timelines.
+
+Built with **Python**, **pandas**, and **pytest**, with **99 automated tests** covering detection logic, configurable parameters, input validation, reporting, command-line integration, and end-to-end processing.
 
 ## Overview
 
@@ -22,15 +24,21 @@ Authentication data is loaded from CSV files, validated before analysis, and eva
 
 ## Detection Rules
 
+Each detection rule supports independently configurable thresholds and time windows through command-line arguments.
+
+By default, all three rules use a threshold of **5** and a detection window of **10 minutes**. These settings can be adjusted without modifying the source code.
+
+Detection thresholds must be positive integers, and detection windows must represent valid, positive time durations.
+
 ### 1. Brute Force
 
 Identifies repeated failed authentication attempts against the same user account from the same source IP address.
 
 **Detection criteria:**
-- At least **5 failed login attempts**
+- At least **5 failed login attempts** by default
 - Same **username**
 - Same **source IP address**
-- Occurring within a **10-minute window**
+- Occurring within a **10-minute window** by default
 
 The alert records the affected username, source IP address, failure count, and the timestamps of the first and last failures in the qualifying window.
 
@@ -39,10 +47,10 @@ The alert records the affected username, source IP address, failure count, and t
 Identifies a source IP address attempting authentication against multiple distinct user accounts within a short period.
 
 **Detection criteria:**
-- At least **5 distinct usernames**
+- At least **5 distinct usernames** by default
 - Same **source IP address**
 - Failed authentication attempts
-- Occurring within a **10-minute window**
+- Occurring within a **10-minute window** by default
 
 The alert records the source IP address, number of unique accounts targeted, usernames involved, and the timestamps of the first and last failures.
 
@@ -51,10 +59,10 @@ The alert records the source IP address, number of unique accounts targeted, use
 Identifies a successful authentication that occurs after repeated failed attempts against the same account from the same source IP address.
 
 **Detection criteria:**
-- At least **5 failed login attempts**
+- At least **5 failed login attempts** by default
 - Same **username**
 - Same **source IP address**
-- Failures occurring within the **10 minutes preceding a successful login**
+- Failures occurring within the **10 minutes preceding a successful login** by default
 
 The successful authentication acts as the triggering event. The alert records the username, source IP address, number of preceding failures, failure time range, and successful login timestamp.
 
@@ -62,15 +70,18 @@ The successful authentication acts as the triggering event. The alert records th
 
 - Rule-based detection of brute-force activity, password spraying, and successful logins following repeated failures
 - Time-window analysis and event correlation by username and source IP address
+- Independently configurable detection thresholds and time windows for all three detection rules
+- Validation of detection parameters to reject invalid thresholds and time durations
 - Structured security alerts containing detection type, severity, affected entities, event counts, and relevant timestamps
 - CSV authentication log ingestion and validation using pandas
 - Input validation for required columns, missing or blank usernames, malformed IPv4 and IPv6 addresses, unsupported authentication statuses, and invalid or missing timestamps
 - Human-readable terminal reporting for detected anomalies
 - Optional CSV export for downstream analysis and reporting
-- Self-contained HTML security analysis reports with an executive summary and detection overview
+- Self-contained HTML security analysis reports with an executive summary, detection configuration, and detection overview
 - Detailed investigation findings with supporting authentication event evidence
 - Chronological event timelines and documented detection methodology
-- Command-line interface with configurable input, CSV output, and HTML report paths
+- Command-line interface with configurable detection parameters, input paths, and CSV and HTML report destinations
+- Explicit command-line exit codes for successful execution and handled errors
 - Support for generating CSV and HTML reports simultaneously
 - Modular detection and reporting functions designed for extension
 - Automated unit and integration testing with pytest, including GitHub Actions CI for pushes and pull requests targeting main
@@ -206,6 +217,40 @@ Both reports contain findings from the same authentication analysis. The CSV pro
 
 The analyzer continues to display detected alerts in the terminal regardless of whether either export option is specified.
 
+### Configure detection thresholds and time windows
+
+Each detection rule supports independent threshold and time-window settings through command-line arguments. All parameters are optional, and the analyzer uses the default values when no overrides are provided.
+
+| Detection rule | Threshold argument | Window argument | Default threshold | Defualt window |
+|----------------|--------------------|-----------------|-------------------|----------------|
+| Brute force | --brute-force-threshold | --brute-force-window | 5 failures | 10min|
+| Password Spraying | --password-spray-threshold | --password-spray-window | 5 distinct usernames | 10min |
+| Successful Login After Failures | --success-after-failures-threshold | --success-after-failures-window | 5 failures | 10min |
+
+**Example: Customize brute-force detection**
+
+```bash
+python -m src.analyzer \
+    --brute-force-threshold 3 \
+    --brute-force-window 30min
+```
+
+**Example: Configure all three detection rules**
+
+```bash
+python -m src.analyzer \
+    --brute-force-threshold 3 \
+    --brute-force-window 30min \
+    --password-spray-threshold 4 \
+    --password-spray-window 20min \
+    --success-after-failures-threshold 5 \
+    --success-after-failures-window 15min \
+    --html output/security_report.html
+```
+The analyzer applies the specified parameters independently to each detection rule. When an HTML report is generated, its **Detection Configuration** section records the threshold and time window used for each rule.
+
+Thresholds must be positive integers. Time windows must represent valid, positive durations, such as 5min, 15min, or 1h. Invalid parameters cause the analyzer to terminate with an error rather than produce potentially misleading results.
+
 ### View command-line help
 
 ```bash
@@ -257,14 +302,19 @@ When `--output` is specified, the same findings are also exported as structured 
 
 When `--html` is specified, the analyzer generates a self-contained HTML security report designed to support authentication security investigations.
 
-The report includes:
+The HTML report is organized into the following sections:
 
-- **Executive summary** — An overview of the authentication analysis and detected security findings.
-- **Detection overview** — A breakdown of findings by detection type.
-- **Investigation findings** — Detailed information about individual alerts, including affected accounts, source IP addresses, severity, and relevant timestamps.
+1. **Analysis Information** — Identifies the authentication data source and provides information about the analysis.
+2. **Detection Configuration** — Documents the thresholds and time windows used for each detection rule.
+3. **Executive Summary** — Summarizes authentication activity and detected security findings.
+4. **Detection Overview** — Provides a breakdown of findings by detection type.
+5. **Authentication Timeline** — Presents authentication events chronologically to support investigation and event correlation.
+
+The report also provides detailed investigative information, including:
+
+- **Investigation findings** — Individual alerts with affected accounts, source IP addresses, severity, and relevant timestamps.
 - **Supporting evidence** — Authentication events associated with each finding.
-- **Event timelines** — Chronological views of authentication activity relevant to detected anomalies.
-- **Detection methodology** — Explanations of the rules and criteria used to identify suspicious activity.
+- **Detection methodology** — Explanations of the detection rules and criteria used to identify suspicious activity.
 
 To generate the report using the included sample data:
 
@@ -313,13 +363,13 @@ The authentication data included in this repository is synthetic and does not co
 
 ## Testing
 
-The project includes **51 automated tests** using pytest, covering authentication anomaly detection, input validation, CSV export, HTML security reporting, and command-line integration.
+TThe project includes **99 automated tests** using pytest, covering authentication anomaly detection, configurable detection parameters, input validation, CSV export, HTML security reporting, command-line integration, and error handling.
 
 The test suite is organized into three modules:
 
-- **`tests/test_analyzer.py`** — 23 tests covering detection thresholds, time-window enforcement, event correlation, input validation, terminal output, and CSV export.
-- **`tests/test_reporting.py`** — 22 tests covering HTML report generation, report content, investigation evidence, event timelines, formatting, and output safety.
-- **`tests/test_cli.py`** — 6 integration tests covering HTML report generation, simultaneous CSV and HTML exports, and execution without optional export arguments.
+- **`tests/test_analyzer.py`** — 62 tests covering detection thresholds, time-window enforcement, event correlation, input validation, terminal output, and CSV export.
+- **`tests/test_reporting.py`** — 28 tests covering HTML report generation, report content, investigation evidence, event timelines, formatting, and output safety.
+- **`tests/test_cli.py`** — 9 integration tests covering HTML report generation, simultaneous CSV and HTML exports, and execution without optional export arguments.
 
 ### Run the complete test suite
 
@@ -332,7 +382,7 @@ python -m pytest -v
 Expected result:
 
 ```text
-51 passed
+99 passed
 ```
 
 ### Continuous Integration (GitHub Actions)
@@ -380,7 +430,7 @@ Temporary files and directories are managed through pytest fixtures to keep test
 
 This project is a rule-based authentication log analyzer intended for learning, demonstration, and security analytics practice. The current implementation has several limitations:
 
-- **Fixed detection parameters** — Detection rules currently use predefined thresholds and 10-minute detection windows. Users cannot yet configure these parameters or restrict analysis to a specified date range. Production environments typically require settings tuned to normal authentication behavior and organizational risk.
+- **No date-range filtering** — Detection thresholds and time windows are configurable, but the analyzer does not currently support restricting analysis to a specified start and end date. All validated authentication events in the input file are evaluated against the configured detection rules.
 - **Limited event context** — Analysis is based on timestamp, username, source IP address, and authentication status. It does not currently incorporate device identity, geolocation, user agent, authentication method, identity provider, or other contextual signals.
 - **Potential false positives** — Repeated failures can result from forgotten passwords, stale credentials, automated services, shared network addresses, or legitimate user behavior.
 - **Potential false negatives** — Slow or distributed attacks may remain below the configured thresholds. Attackers using multiple source IP addresses may also avoid rules that correlate events by a single source IP.
@@ -395,13 +445,13 @@ Detected anomalies should therefore be treated as **investigative signals that r
 
 The current implementation is intentionally scoped as a rule-based authentication analytics project. Potential extensions for a production-oriented implementation could include:
 
-- **Configurable time-window analysis** — Allow users to specify detection windows and filter authentication events by start and end timestamps through command-line arguments, improving flexibility and reproducibility.
+- **Date-range filtering** — Allow users to restrict authentication analysis to specified start and end timestamps through command-line arguments, supporting targeted investigations.
 - **Additional authentication detections** — Add rules for unusual login times, distributed authentication attacks, repeated account lockouts, and other suspicious authentication patterns.
 - **Contextual enrichment** — Incorporate additional fields such as device identifiers, geographic information, authentication methods, and user agents to improve detection context.
 - **IP reputation enrichment** — Optionally evaluate source IP addresses using external threat-intelligence or reputation data.
 - **Structured logging and alert formats** — Support formats such as JSON for easier integration with security tooling and downstream analysis.
 - **Larger-scale log processing** — Adapt the analyzer to process larger datasets or ingest events from APIs, identity platforms, or centralized logging systems.
-- **Detection configuration and severity tuning** — Allow detection rules, thresholds, and severity levels to be adjusted for different environments and risk profiles.
+- **Detection rule and severity customization** — Allow users to enable or disable individual detection rules and customize alert severity classifications according to organizational risk profiles.
 
 ## Technologies
 

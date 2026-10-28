@@ -1248,3 +1248,139 @@ def test_generate_html_report_escapes_source_filename(tmp_path):
     # Verify that the HTML markup is escaped.
     assert '&lt;script&gt;alert(1).csv' in html
     assert '<script>' not in html
+
+
+def test_generate_html_report_escapes_detection_config(tmp_path):
+    '''
+    Verify that potentially unsafe HTML in detection configuration
+    values is escaped before insertion into the HTML report.
+    '''
+
+    # Create an empty authentication dataset.
+    auth_logs = pd.DataFrame(
+        columns=['timestamp', 'username', 'source_ip', 'status']
+    )
+
+    alerts = []
+    output_path = tmp_path / 'security_report.html'
+
+    # Simulate an unsafe configuration value.
+    detection_config = {
+        'brute_force': {
+            'threshold': 3,
+            'window': '<script>alert(1)</script>'
+        },
+        'password_spraying': {
+            'threshold': 4,
+            'window': '20min'
+        },
+        'success_after_failures': {
+            'threshold': 5,
+            'window': '15min'
+        }
+    }
+
+    # Generate the HTML report.
+    generate_html_report(
+        auth_logs,
+        alerts,
+        output_path,
+        detection_config=detection_config
+    )
+
+    # Read the generated HTML.
+    html = output_path.read_text(encoding='utf-8')
+
+    # Verify that the unsafe markup is escaped.
+    assert '&lt;script&gt;alert(1)&lt;/script&gt;' in html
+    assert '<script>alert(1)</script>' not in html
+
+
+def test_html_report_displays_detection_configuration(tmp_path):
+    '''
+    Verify that the HTML report includes the detection thresholds
+    and time windows supplied for each detection rule.
+    '''
+    from src.analyzer import load_auth_logs
+    from src.reporting import generate_html_report
+
+    # Load sample authentication events.
+    auth_logs = load_auth_logs('data/auth_logs.csv')
+
+    # Define distinct settings for all three detection rules.
+    detection_config = {
+        'brute_force': {
+            'threshold': 3,
+            'window': '30min'
+        },
+        'password_spraying': {
+            'threshold': 4,
+            'window': '20min'
+        },
+        'success_after_failures': {
+            'threshold': 5,
+            'window': '15min'
+        }
+    }
+
+    # Generate a report without alerts to verify that configuration
+    # reporting does not depend on detections being present.
+    output_path = tmp_path / 'configuration_report.html'
+
+    generate_html_report(
+        auth_logs,
+        [],
+        output_path,
+        detection_config=detection_config
+    )
+
+    # Read the generated report.
+    html = output_path.read_text(encoding='utf-8')
+
+    # Verify that the configuration section exists.
+    assert '<h2>Detection Configuration</h2>' in html
+
+    # Verify that all three detection rules are documented.
+    assert 'Brute Force' in html
+    assert 'Password Spraying' in html
+    assert 'Success After Failures' in html
+
+    # Verify the configured thresholds and time windows.
+    assert 'Threshold: 3' in html
+    assert 'Window: 30min' in html
+
+    assert 'Threshold: 4' in html
+    assert 'Window: 20min' in html
+
+    assert 'Threshold: 5' in html
+    assert 'Window: 15min' in html
+
+
+def test_html_report_without_detection_configuration(tmp_path):
+    '''
+    Verify that reports generated without an explicit detection
+    configuration clearly indicate that the settings are unavailable.
+    '''
+    from src.analyzer import load_auth_logs
+    from src.reporting import generate_html_report
+
+    # Load sample authentication events.
+    auth_logs = load_auth_logs('data/auth_logs.csv')
+
+    # Generate a report without supplying detection_config.
+    output_path = tmp_path / 'report_without_config.html'
+
+    generate_html_report(
+        auth_logs,
+        [],
+        output_path
+    )
+
+    # Read the generated HTML report.
+    html = output_path.read_text(encoding='utf-8')
+
+    # Verify that the configuration section remains present.
+    assert '<h2>Detection Configuration</h2>' in html
+
+    # Verify that the report does not assume configuration values.
+    assert 'Detection configuration was not provided.' in html
